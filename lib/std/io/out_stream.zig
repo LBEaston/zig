@@ -23,8 +23,13 @@ pub fn OutStream(comptime WriteError: type) type {
         writeFn: WriteFn,
 
         pub fn writeOnce(self: *Self, bytes: []const u8) Error!usize {
+            if (bytes.len == 0) // TODO: Maybe assert this?
+                return;
+
             try self.applyIndent();
             try self.writeNoIndent(bytes);
+            if (bytes[bytes.len-1] == '\n')
+                self.current_line_empty = true;
         }
 
         fn writeNoIndent(self: *Self, bytes: []const u8) Error!void {
@@ -66,7 +71,7 @@ pub fn OutStream(comptime WriteError: type) type {
             var remaining: usize = n;
             while (remaining > 0) {
                 const to_write = std.math.min(remaining, bytes.len);
-                try self.write(bytes[0..to_write]);
+                try self.writeNoIndent(bytes[0..to_write]);
                 remaining -= to_write;
             }
         }
@@ -74,6 +79,7 @@ pub fn OutStream(comptime WriteError: type) type {
         current_line_empty: bool = true,
         indent_stack: [255]u8 = undefined,
         indent_stack_top: u8 = 0,
+        indent_one_shot_count: u8 = 0,
         indent_delta: u8 = 0,
 
         pub fn insertNewline(self: *Self) Error!void {
@@ -113,6 +119,11 @@ pub fn OutStream(comptime WriteError: type) type {
             warn("~pushindent +{} {}\n", .{n, self.indent_stack_top});
         }
 
+        pub fn pushIndentOneShot(self: *Self) void {
+            self.indent_one_shot_count += 1;
+            self.pushIndent();
+        }
+
         pub fn popIndent(self: *Self) void {
             warn("popindent {}\n", .{self.indent_stack_top});
             assert(self.indent_stack_top != 0);
@@ -123,6 +134,8 @@ pub fn OutStream(comptime WriteError: type) type {
             if (self.current_line_empty and self.indent_stack_top > 0)
                 for (self.indent_stack[0..self.indent_stack_top]) |indent|
                     try self.writeByteNTimesNoIndent(' ', indent);
+            self.indent_stack_top -= self.indent_one_shot_count;
+            self.indent_one_shot_count = 0;
             self.current_line_empty = false;
         }
 
