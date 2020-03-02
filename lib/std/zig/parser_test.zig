@@ -554,7 +554,29 @@ test "zig fmt: 2nd arg multiline string" {
         \\comptime {
         \\    cases.addAsm("hello world linux x86_64",
         \\        \\.text
-        \\    , "Hello, world!\n");
+        \\        , "Hello, world!\n");
+        \\}
+        \\
+    );
+}
+
+test "zig fmt: 2nd arg multiline string many args" {
+    try testCanonical(
+        \\comptime {
+        \\    cases.addAsm("hello world linux x86_64",
+        \\        \\.text
+        \\        , "Hello, world!\n", "Hello, world!\n");
+        \\}
+        \\
+    );
+}
+
+test "zig fmt: final arg multiline string" {
+    try testCanonical(
+        \\comptime {
+        \\    cases.addAsm("hello world linux x86_64", "Hello, world!\n",
+        \\        \\.text
+        \\    );
         \\}
         \\
     );
@@ -588,6 +610,11 @@ test "zig fmt: if condition wraps" {
         \\        return x;
         \\    }
         \\    var a = if (a) |*f| x: {
+        \\        break :x &a.b;
+        \\    } else |err| err;
+        \\    var a = if (cond and
+        \\                cond) |*f|
+        \\    x: {
         \\        break :x &a.b;
         \\    } else |err| err;
         \\}
@@ -624,6 +651,11 @@ test "zig fmt: if condition wraps" {
         \\        return x;
         \\    }
         \\    var a = if (a) |*f| x: {
+        \\        break :x &a.b;
+        \\    } else |err| err;
+        \\    var a = if (cond and
+        \\        cond) |*f|
+        \\    x: {
         \\        break :x &a.b;
         \\    } else |err| err;
         \\}
@@ -903,7 +935,7 @@ test "zig fmt: array literal with hint" {
         \\const a = []u8{
         \\    1, 2,
         \\    3, //
-        \\        4,
+        \\    4,
         \\    5, 6,
         \\    7,
         \\};
@@ -968,7 +1000,7 @@ test "zig fmt: multiline string parameter in fn call with trailing comma" {
         \\        \\ZIG_C_HEADER_FILES   {}
         \\        \\ZIG_DIA_GUIDS_LIB    {}
         \\        \\
-        \\    ,
+        \\        ,
         \\        std.cstr.toSliceConst(c.ZIG_CMAKE_BINARY_DIR),
         \\        std.cstr.toSliceConst(c.ZIG_CXX_COMPILER),
         \\        std.cstr.toSliceConst(c.ZIG_DIA_GUIDS_LIB),
@@ -2559,20 +2591,20 @@ test "zig fmt: multiline string in array" {
     try testCanonical(
         \\const Foo = [][]const u8{
         \\    \\aaa
-        \\,
+        \\    ,
         \\    \\bbb
         \\};
         \\
         \\fn bar() void {
         \\    const Foo = [][]const u8{
         \\        \\aaa
-        \\    ,
+        \\        ,
         \\        \\bbb
         \\    };
         \\    const Bar = [][]const u8{ // comment here
         \\        \\aaa
         \\        \\
-        \\    , // and another comment can go here
+        \\        , // and another comment can go here
         \\        \\bbb
         \\    };
         \\}
