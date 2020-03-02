@@ -810,13 +810,14 @@ fn renderExpression(
                     }
 
                     {
-                        stream.pushIndent();
-                        defer stream.popIndent();
-
                         switch (suffix_op.lhs) {
                             .dot => |dot| try renderToken(tree, stream, dot, Space.None),
                             .node => |node| try renderExpression(allocator, stream, tree, node, Space.None),
                         }
+
+                        stream.pushIndent();
+                        defer stream.popIndent();
+
                         try renderToken(tree, stream, lbrace, Space.Newline);
 
                         var it = field_inits.iterator(0);
@@ -1771,12 +1772,10 @@ fn renderExpression(
                 try renderExtraNewline(tree, stream, if_node.body);
             } else if (body_is_block) {
                 const src_has_newline = !tree.tokensOnSameLine(lparen, rparen);
-                const after_rparen_space = if (src_has_newline and if_node.payload == null) Space.Newline else Space.Space;
-                const after_payload_space = if (src_has_newline and if_node.payload != null) Space.Newline else Space.Space;
-                try renderToken(tree, stream, rparen, after_rparen_space); // )
+                try renderToken(tree, stream, rparen, Space.Space); // )
 
                 if (if_node.payload) |payload| {
-                    try renderExpression(allocator, stream, tree, payload, after_payload_space); // |x|
+                    try renderExpression(allocator, stream, tree, payload, Space.Newline); // |x|
                 }
 
                 if (if_node.@"else") |@"else"| {
@@ -1790,8 +1789,7 @@ fn renderExpression(
             const src_has_newline = !tree.tokensOnSameLine(rparen, if_node.body.lastToken());
 
             if (src_has_newline) {
-                const after_rparen_space = if (if_node.payload == null) Space.Newline else Space.Space;
-                try renderToken(tree, stream, rparen, after_rparen_space); // )
+                try renderToken(tree, stream, rparen, Space.Space); // )
 
                 if (if_node.payload) |payload| {
                     try renderExpression(allocator, stream, tree, payload, Space.Newline);
