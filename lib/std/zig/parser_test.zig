@@ -310,6 +310,17 @@ test "zig fmt: infix operator and then multiline string literal" {
     );
 }
 
+test "zig fmt: infix operator and then multiline string literal" {
+    try testCanonical(
+        \\const x = "" ++
+        \\    \\ hi0
+        \\    \\ hi1
+        \\    \\ hi2
+        \\;
+        \\
+    );
+}
+
 test "zig fmt: C pointers" {
     try testCanonical(
         \\const Ptr = [*c]i32;
@@ -691,9 +702,10 @@ test "zig fmt: if condition has line break but must not wrap" {
     try testCanonical(
         \\comptime {
         \\    if (self.user_input_options.put(name, UserInputOption{
-        \\        .name = name,
-        \\        .used = false,
-        \\    }) catch unreachable) |*prev_value| {
+        \\            .name = name,
+        \\            .used = false,
+        \\        }) catch unreachable) |*prev_value|
+        \\    {
         \\        foo();
         \\        bar();
         \\    }
@@ -703,6 +715,18 @@ test "zig fmt: if condition has line break but must not wrap" {
         \\    )) {
         \\        foo();
         \\    }
+        \\}
+        \\
+    );
+}
+
+test "zig fmt: function call with multiline argument" {
+    try testCanonical(
+        \\comptime {
+        \\    self.user_input_options.put(name, UserInputOption{
+        \\            .name = name,
+        \\            .used = false,
+        \\        });
         \\}
         \\
     );
