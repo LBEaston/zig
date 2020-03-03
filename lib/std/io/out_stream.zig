@@ -105,24 +105,28 @@ pub fn OutStream(comptime WriteError: type) type {
             self.pushIndentN(self.indent_delta);
         }
 
+        /// Push an indent of arbitrary width
         pub fn pushIndentN(self: *Self, n: u8) void {
             assert(self.indent_stack_top < std.math.maxInt(u8));
             self.indent_stack[self.indent_stack_top] = n;
             self.indent_stack_top += 1;
         }
 
+        /// Push an indent that is automatically popped after being applied
         pub fn pushIndentOneShot(self: *Self) void {
             self.indent_one_shot_count += 1;
             self.pushIndent();
         }
 
-        /// turns all one-shot indents into regular ones, returns number of indents that must now be manually popped
-        pub fn lockIndent(self: *Self) u8 {
+        /// Turns all one-shot indents into regular indents
+        /// Returns number of indents that must now be manually popped
+        pub fn lockOneShotIndent(self: *Self) u8 {
             var locked_count = self.indent_one_shot_count;
             self.indent_one_shot_count = 0;
             return locked_count;
         }
 
+        /// Push an indent that should not take effect until the next line
         pub fn pushIndentNextLine(self: *Self) void {
             self.indent_next_line += 1;
             self.pushIndent();
@@ -133,6 +137,7 @@ pub fn OutStream(comptime WriteError: type) type {
             self.indent_stack_top -= 1;
         }
 
+        /// Writes ' ' bytes if the current line is empty
         fn applyIndent(self: *Self) Error!void {
             const current_indent = self.currentIndent();
             if (self.current_line_empty and current_indent > 0) {
@@ -145,6 +150,7 @@ pub fn OutStream(comptime WriteError: type) type {
             self.current_line_empty = false;
         }
 
+        /// Checks to see if the most recent indentation exceeds the currently pushed indents
         pub fn isLineOverIndented(self: *Self) bool {
             if (self.current_line_empty) return false;
             return self.applied_indent > self.currentIndent();

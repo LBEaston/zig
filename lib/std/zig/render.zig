@@ -536,10 +536,9 @@ fn renderExpression(
                 .ArrayType => |array_info| {
                     const lbracket = prefix_op_node.op_token;
                     const rbracket = tree.nextToken(if (array_info.sentinel) |sentinel|
-                        sentinel.lastToken()
-                    else
-                        array_info.len_expr.lastToken());
-
+                            sentinel.lastToken()
+                        else
+                            array_info.len_expr.lastToken());
 
                     const starts_with_comment = tree.tokens.at(lbracket + 1).id == .LineComment;
                     const ends_with_comment = tree.tokens.at(rbracket - 1).id == .LineComment;
@@ -1296,8 +1295,11 @@ fn renderExpression(
         .MultilineStringLiteral => {
             const multiline_str_literal = @fieldParentPtr(ast.Node.MultilineStringLiteral, "base", base);
 
-            const locked_indents = stream.lockIndent();
-            defer { var i: u8 = 0; while (i < locked_indents) : (i += 1) stream.popIndent(); }
+            const locked_indents = stream.lockOneShotIndent();
+            defer {
+                var i: u8 = 0;
+                while (i < locked_indents) : (i += 1) stream.popIndent();
+            }
             try stream.maybeInsertNewline();
 
             var i: usize = 0;
@@ -1407,16 +1409,16 @@ fn renderExpression(
             const rparen = tree.prevToken(
             // the first token for the annotation expressions is the left
             // parenthesis, hence the need for two prevToken
-            if (fn_proto.align_expr) |align_expr|
-                tree.prevToken(tree.prevToken(align_expr.firstToken()))
-            else if (fn_proto.section_expr) |section_expr|
-                tree.prevToken(tree.prevToken(section_expr.firstToken()))
-            else if (fn_proto.callconv_expr) |callconv_expr|
-                tree.prevToken(tree.prevToken(callconv_expr.firstToken()))
-            else switch (fn_proto.return_type) {
-                .Explicit => |node| node.firstToken(),
-                .InferErrorSet => |node| tree.prevToken(node.firstToken()),
-            });
+                if (fn_proto.align_expr) |align_expr|
+                    tree.prevToken(tree.prevToken(align_expr.firstToken()))
+                else if (fn_proto.section_expr) |section_expr|
+                    tree.prevToken(tree.prevToken(section_expr.firstToken()))
+                else if (fn_proto.callconv_expr) |callconv_expr|
+                    tree.prevToken(tree.prevToken(callconv_expr.firstToken()))
+                else switch (fn_proto.return_type) {
+                    .Explicit => |node| node.firstToken(),
+                    .InferErrorSet => |node| tree.prevToken(node.firstToken()),
+                });
             assert(tree.tokens.at(rparen).id == .RParen);
 
             const src_params_trailing_comma = blk: {
@@ -1893,7 +1895,6 @@ fn renderExpression(
                             const comma = tree.prevToken(next_asm_output.*.firstToken());
                             try renderToken(tree, stream, comma, Space.Newline); // ,
                             try renderExtraNewline(tree, stream, next_node);
-
                         } else if (asm_node.inputs.len == 0 and asm_node.clobbers.len == 0) {
                             try renderExpression(allocator, stream, tree, node, Space.Newline);
                             break :contents;
@@ -2156,6 +2157,7 @@ fn renderTokenOffset(
     token_skip_bytes: usize,
 ) (@TypeOf(stream).Child.Error || Error)!void {
     if (space == Space.BlockStart) {
+        // If placing the lbrace on the current line would cause an uggly gap then put the lbrace on the next line
         const new_space = if (stream.isLineOverIndented()) Space.Newline else Space.Space;
         return renderToken(tree, stream, token_index, new_space);
     }
@@ -2247,11 +2249,6 @@ fn renderTokenOffset(
             switch (space) {
                 Space.None, Space.Space => {
                     try stream.insertNewline();
-                    //const after_comment_token = tree.tokens.at(token_index + offset);
-                    //const next_line_indent = switch (after_comment_token.id) {
-                    //    .RParen, .RBrace, .RBracket => else => indent + indent_delta,
-                    //};
-                    //try stream.writeByteNTimes(' ', next_line_indent);
                 },
                 Space.SpaceOrOutdent => {
                     try stream.insertNewline();
@@ -2295,20 +2292,9 @@ fn renderTokenOffset(
                     try stream.insertNewline();
 
                     const after_comment_token = tree.tokens.at(token_index + offset);
-                    //const next_line_indent = switch (after_comment_token.id) {
-                    //    .RParen, .RBrace, .RBracket => blk: {
-                    //        if (indent > indent_delta) {
-                    //            break :blk indent - indent_delta;
-                    //        } else {
-                    //            break :blk 0;
-                    //        }
-                    //    },
-                    //    else => };
-                    //try stream.writeByteNTimes(' ', next_line_indent);
                 },
                 Space.SpaceOrOutdent => {
                     try stream.insertNewline();
-                    //try stream.writeByteNTimes(' ', indent);
                 },
                 Space.NoNewline => {},
                 Space.NoComment, Space.Comma, Space.BlockStart => unreachable,
@@ -2332,7 +2318,7 @@ fn renderDocComments(
     tree: *ast.Tree,
     stream: var,
     node: var,
-    ) (@TypeOf(stream).Child.Error || Error)!void {
+) (@TypeOf(stream).Child.Error || Error)!void {
     const comment = node.doc_comments orelse return;
     var it = comment.lines.iterator(0);
     const first_token = node.firstToken();
