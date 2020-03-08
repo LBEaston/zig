@@ -604,8 +604,7 @@ fn renderExpression(
 
                     var it = call_info.params.iterator(0);
                     while (it.next()) |param_node| {
-                        stream.pushIndent();
-                        defer stream.popIndent();
+                        if (param_node.*.id == .MultilineStringLiteral) stream.pushIndentOneShot();
 
                         try renderExpression(allocator, stream, tree, param_node.*, Space.None);
 
@@ -1265,17 +1264,16 @@ fn renderExpression(
         .MultilineStringLiteral => {
             const multiline_str_literal = @fieldParentPtr(ast.Node.MultilineStringLiteral, "base", base);
 
-            const locked_indents = stream.lockOneShotIndent();
-            defer {
-                var i: u8 = 0;
-                while (i < locked_indents) : (i += 1) stream.popIndent();
-            }
-            try stream.maybeInsertNewline();
+            var line_it = multiline_str_literal.lines.iterator(0);
+            {
+                const locked_indents = stream.lockOneShotIndent();
+                defer {
+                    var i: u8 = 0;
+                    while (i < locked_indents) : (i += 1) stream.popIndent();
+                }
+                try stream.maybeInsertNewline();
 
-            var i: usize = 0;
-            while (i < multiline_str_literal.lines.len) : (i += 1) {
-                const t = multiline_str_literal.lines.at(i).*;
-                try renderToken(tree, stream, t, Space.None);
+                while (line_it.next()) |line| try renderToken(tree, stream, line.*, Space.None);
             }
         },
         .UndefinedLiteral => {

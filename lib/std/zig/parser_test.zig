@@ -29,7 +29,7 @@ test "zig fmt: trailing comma in container declaration" {
     try testTransform(
         \\const X = struct {
         \\    foo: i32, bar: i8 };
-        ,
+    ,
         \\const X = struct {
         \\    foo: i32, bar: i8
         \\};
@@ -80,7 +80,7 @@ test "zig fmt: change @typeOf to @TypeOf" {
     try testTransform(
         \\const a = @typeOf(@as(usize, 10));
         \\
-        ,
+    ,
         \\const a = @TypeOf(@as(usize, 10));
         \\
     );
@@ -93,7 +93,7 @@ test "zig fmt: convert extern/nakedcc/stdcallcc into callconv(...)" {
         \\stdcallcc fn foo2() void {}
         \\extern fn foo3() void {}
         \\extern "mylib" fn foo4() void {}
-        ,
+    ,
         \\fn foo1() callconv(.Naked) void {}
         \\fn foo2() callconv(.Stdcall) void {}
         \\fn foo3() callconv(.C) void {}
@@ -349,7 +349,7 @@ test "zig fmt: correctly move doc comments on struct fields" {
         \\    sectname: [16]u8, /// name of this section
         \\    segname: [16]u8,  /// segment this section goes in
         \\};
-        ,
+    ,
         \\pub const section_64 = extern struct {
         \\    /// name of this section
         \\    sectname: [16]u8,
@@ -421,7 +421,7 @@ test "zig fmt: comment to disable/enable zig fmt" {
         \\const  c  =  d;
         \\// zig fmt: on
         \\const  e  =  f;
-        ,
+    ,
         \\const a = b;
         \\// zig fmt: off
         \\const  c  =  d;
@@ -565,7 +565,7 @@ test "zig fmt: 2nd arg multiline string" {
         \\comptime {
         \\    cases.addAsm("hello world linux x86_64",
         \\        \\.text
-        \\        , "Hello, world!\n");
+        \\    , "Hello, world!\n");
         \\}
         \\
     );
@@ -576,7 +576,7 @@ test "zig fmt: 2nd arg multiline string many args" {
         \\comptime {
         \\    cases.addAsm("hello world linux x86_64",
         \\        \\.text
-        \\        , "Hello, world!\n", "Hello, world!\n");
+        \\    , "Hello, world!\n", "Hello, world!\n");
         \\}
         \\
     );
@@ -629,7 +629,7 @@ test "zig fmt: if condition wraps" {
         \\        break :x &a.b;
         \\    } else |err| err;
         \\}
-        ,
+    ,
         \\comptime {
         \\    if (cond and
         \\        cond)
@@ -702,10 +702,9 @@ test "zig fmt: if condition has line break but must not wrap" {
     try testCanonical(
         \\comptime {
         \\    if (self.user_input_options.put(name, UserInputOption{
-        \\            .name = name,
-        \\            .used = false,
-        \\        }) catch unreachable) |*prev_value|
-        \\    {
+        \\        .name = name,
+        \\        .used = false,
+        \\    }) catch unreachable) |*prev_value| {
         \\        foo();
         \\        bar();
         \\    }
@@ -724,9 +723,9 @@ test "zig fmt: function call with multiline argument" {
     try testCanonical(
         \\comptime {
         \\    self.user_input_options.put(name, UserInputOption{
-        \\            .name = name,
-        \\            .used = false,
-        \\        });
+        \\        .name = name,
+        \\        .used = false,
+        \\    });
         \\}
         \\
     );
@@ -741,7 +740,7 @@ test "zig fmt: same-line doc comment on variable declaration" {
         \\
         \\// nameserver query return codes
         \\pub const ENSROK = 0; /// DNS server returned answer with no data
-        ,
+    ,
         \\/// allocated from memory, swap space
         \\pub const MAP_ANONYMOUS = 0x1000;
         \\/// map from file (default)
@@ -835,7 +834,7 @@ test "zig fmt: respect line breaks after infix operators" {
 test "zig fmt: fn decl with trailing comma" {
     try testTransform(
         \\fn foo(a: i32, b: i32,) void {}
-        ,
+    ,
         \\fn foo(
         \\    a: i32,
         \\    b: i32,
@@ -847,7 +846,7 @@ test "zig fmt: fn decl with trailing comma" {
 test "zig fmt: enum decl with no trailing comma" {
     try testTransform(
         \\const StrLitKind = enum {Normal, C};
-        ,
+    ,
         \\const StrLitKind = enum { Normal, C };
         \\
     );
@@ -870,7 +869,7 @@ test "zig fmt: struct literal no trailing comma" {
         \\const a = foo{ .x = 1, .y = 2 };
         \\const a = foo{ .x = 1,
         \\    .y = 2 };
-        ,
+    ,
         \\const a = foo{ .x = 1, .y = 2 };
         \\const a = foo{
         \\    .x = 1,
@@ -892,7 +891,7 @@ test "zig fmt: struct literal containing a multiline expression" {
         \\    10 else 20};
         \\const a = A{ .x = switch(g) {0 => "ok", else => "no"} };
         \\
-        ,
+    ,
         \\const a = A{ .x = if (f1()) 10 else 20 };
         \\const a = A{
         \\    .x = if (f1()) 10 else 20,
@@ -961,7 +960,7 @@ test "zig fmt: array literal with hint" {
         \\    5, 6, //
         \\    7, 8, //
         \\};
-        ,
+    ,
         \\const a = []u8{
         \\    1, 2,
         \\    3, 4,
@@ -1013,7 +1012,7 @@ test "zig fmt: array literal veritical column alignment" {
         \\           80,
         \\    9, 10, 11, 0, 13, 14, 15};
         \\
-        ,
+    ,
         \\const a = []u8{
         \\    1000,  200,
         \\    30,    4,
@@ -1082,7 +1081,7 @@ test "zig fmt: multi line arguments without last comma" {
         \\    return a + b + c + d;
         \\}
         \\
-        ,
+    ,
         \\pub fn foo(a: usize, b: usize, c: usize, d: usize) usize {
         \\    return a + b + c + d;
         \\}
@@ -1116,7 +1115,7 @@ test "zig fmt: extra newlines at the end" {
         \\
         \\
         \\
-        ,
+    ,
         \\const a = b;
         \\
     );
@@ -1138,7 +1137,7 @@ test "zig fmt: simple asm" {
         \\    asm ("still not real assembly"
         \\        :::"a","b",);
         \\}
-        ,
+    ,
         \\comptime {
         \\    asm volatile (
         \\        \\.globl aoeu;
@@ -1182,7 +1181,7 @@ test "zig fmt: switch cases trailing comma" {
         \\        else => {},
         \\    }
         \\}
-        ,
+    ,
         \\fn switch_cases(x: i32) void {
         \\    switch (x) {
         \\        1, 2, 3 => {},
@@ -1215,7 +1214,7 @@ test "zig fmt: add trailing comma to array literal" {
         \\      '-'};
         \\    return []u16{'m', 's', 'y', 's', '-'};
         \\}
-        ,
+    ,
         \\comptime {
         \\    return []u16{
         \\        'm', 's', 'y', 's', '-', // hi
@@ -1417,7 +1416,7 @@ test "zig fmt: add comma on last switch prong" {
         \\     InitArg.Enum => { }//line comment
         \\ }
         \\}
-        ,
+    ,
         \\test "aoeu" {
         \\    switch (self.init_arg_expr) {
         \\        InitArg.Type => |t| {},
@@ -2364,7 +2363,7 @@ test "zig fmt: for" {
         \\        f(x) else continue;
         \\}
         \\
-        ,
+    ,
         \\test "fix for" {
         \\    for (a) |x|
         \\        f(x)
@@ -2685,7 +2684,7 @@ test "zig fmt: comment after empty comment" {
         \\//
         \\//a
         \\
-        ,
+    ,
         \\const x = true;
         \\//a
         \\
@@ -2702,7 +2701,7 @@ test "zig fmt: line comment in array" {
         \\    };
         \\}
         \\
-        ,
+    ,
         \\test "a" {
         \\    var arr = [_]u32{
         \\        0, // 1,
@@ -2731,7 +2730,7 @@ test "zig fmt: comment after params" {
         \\    // d: u32,
         \\) void {}
         \\
-        ,
+    ,
         \\fn a(
         \\    b: u32, // c: u32,
         \\    // d: u32,
@@ -2788,7 +2787,7 @@ test "zig fmt: comments at several places in struct init" {
         \\    // test
         \\};
         \\
-        ,
+    ,
         \\var bar = Bar{
         \\    .x = 10, // test
         \\    .y = "test", // test
@@ -2865,6 +2864,23 @@ test "zig fmt: top level doc comments" {
 test "zig fmt: extern without container keyword returns error" {
     try testError(
         \\const container = extern {};
+        \\
+    );
+}
+
+test "zig fmt: Only indent multiline string literals in function calls" {
+    try testCanonical(
+        \\test "zig fmt:" {
+        \\    try testTransform(
+        \\        \\const X = struct {
+        \\        \\    foo: i32, bar: i8 };
+        \\    ,
+        \\        \\const X = struct {
+        \\        \\    foo: i32, bar: i8
+        \\        \\};
+        \\        \\
+        \\    );
+        \\}
         \\
     );
 }
