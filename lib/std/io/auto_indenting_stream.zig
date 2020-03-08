@@ -4,13 +4,26 @@ const root = @import("root");
 const mem = std.mem;
 const assert = std.debug.assert;
 
-pub fn AutoIndentingStream(comptime WriteError: type) type {
+pub fn AutoIndentingStream(comptime DownStream: type) type {
     return struct {
         const Self = @This();
-        pub const Error = WriteError;
-        pub const WriteFn = fn (self: *Self, bytes: []const u8) Error!usize;
+        pub const Error = DownStream.Error;
+        down_stream: *DownStream,
 
-        writeFn: WriteFn,
+        current_line_empty: bool = true,
+        indent_stack: [255]u8 = undefined,
+        indent_stack_top: u8 = 0,
+        indent_one_shot_count: u8 = 0, // automatically popped when applied
+        applied_indent: u8 = 0, // the most recently applied indent
+        indent_next_line: u8 = 0, // not used until the next line
+        indent_delta: u8 = indent_delta,
+
+        pub fn init(down_stream: *DownStream, indent_delta: u8) Self {
+            return Self{
+                .down_stream = down_stream,
+                .indent_delta = indent_delta,
+            };
+        }
 
         pub fn write(self: *Self, bytes: []const u8) Error!void {
             if (bytes.len == 0)
@@ -23,8 +36,7 @@ pub fn AutoIndentingStream(comptime WriteError: type) type {
         }
 
         fn writeNoIndent(self: *Self, bytes: []const u8) Error!void {
-            const written = try self.writeFn(self, bytes);
-            assert(written == bytes.len); // Correct slicing of bytes should be done further downstream
+            try self.down_stream.write(bytes);
         }
 
         pub fn print(self: *Self, comptime format: []const u8, args: var) Error!void {
@@ -52,14 +64,6 @@ pub fn AutoIndentingStream(comptime WriteError: type) type {
                 remaining -= to_write;
             }
         }
-
-        current_line_empty: bool = true,
-        indent_stack: [255]u8 = undefined,
-        indent_stack_top: u8 = 0,
-        indent_one_shot_count: u8 = 0, // automatically popped when applied
-        applied_indent: u8 = 0, // the most recently applied indent
-        indent_next_line: u8 = 0, // not used until the next line
-        indent_delta: u8 = 0,
 
         pub fn insertNewline(self: *Self) Error!void {
             try self.writeNoIndent("\n");

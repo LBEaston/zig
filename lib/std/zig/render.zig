@@ -15,54 +15,18 @@ pub const Error = error{
 pub fn render(allocator: *mem.Allocator, stream: var, tree: *ast.Tree) (@TypeOf(stream).Child.Error || Error)!bool {
     comptime assert(@typeInfo(@TypeOf(stream)) == .Pointer);
 
-    var anything_changed: bool = false;
-
     // make a passthrough stream that checks whether something changed
-    const MyStream = struct {
-        const MyStream = @This();
-        const StreamError = @TypeOf(stream).Child.Error;
-        const Stream = std.io.AutoIndentingStream(StreamError);
+    const ChildStream = @TypeOf(stream).Child;
 
-        anything_changed_ptr: *bool,
-        child_stream: @TypeOf(stream),
-        stream: Stream,
-        source_index: usize,
-        source: []const u8,
+    const ChangeDetectionStream = std.io.ChangeDetectionStream(ChildStream);
+    var change_detection_stream = ChangeDetectionStream.init(stream, tree.source);
 
-        fn write(iface_stream: *Stream, bytes: []const u8) StreamError!usize {
-            const self = @fieldParentPtr(MyStream, "stream", iface_stream);
+    const AutoIndentingStream = std.io.AutoIndentingStream(ChangeDetectionStream);
+    var auto_indenting_stream = AutoIndentingStream.init(&change_detection_stream, indent_delta);
 
-            if (!self.anything_changed_ptr.*) {
-                const end = self.source_index + bytes.len;
-                if (end > self.source.len) {
-                    self.anything_changed_ptr.* = true;
-                } else {
-                    const src_slice = self.source[self.source_index..end];
-                    self.source_index += bytes.len;
-                    if (!mem.eql(u8, bytes, src_slice)) {
-                        self.anything_changed_ptr.* = true;
-                    }
-                }
-            }
+    try renderRoot(allocator, &auto_indenting_stream, tree);
 
-            return self.child_stream.writeOnce(bytes);
-        }
-    };
-    var my_stream = MyStream{
-        .stream = MyStream.Stream{ .writeFn = MyStream.write, .indent_delta = indent_delta },
-        .child_stream = stream,
-        .anything_changed_ptr = &anything_changed,
-        .source_index = 0,
-        .source = tree.source,
-    };
-
-    try renderRoot(allocator, &my_stream.stream, tree);
-
-    if (!anything_changed and my_stream.source_index != my_stream.source.len) {
-        anything_changed = true;
-    }
-
-    return anything_changed;
+    return change_detection_stream.changeDetected();
 }
 
 fn renderRoot(
@@ -745,8 +709,12 @@ fn renderExpression(
                         // render field expressions until a LF is found
                         var it = field_inits.iterator(0);
                         while (it.next()) |field_init| {
-                            var find_stream = FindByteOutStream.init('\n');
-                            try renderExpression(allocator, &find_stream.stream, tree, field_init.*, Space.None);
+                            var find_stream = std.io.FindByteOutStream.init('\n');
+
+                            const AutoIndentingStream = std.io.AutoIndentingStream(std.io.FindByteOutStream);
+                            var auto_indenting_stream = AutoIndentingStream.init(&find_stream, indent_delta);
+
+                            try renderExpression(allocator, &auto_indenting_stream, tree, field_init.*, Space.None);
                             if (find_stream.byte_found) break :blk false;
                         }
                         break :blk true;
@@ -905,16 +873,17 @@ fn renderExpression(
                         var column_widths = widths[widths.len - row_size ..];
 
                         // Null stream for counting the printed length of each expression
-                        var null_stream = std.io.NullOutStream.init();
-                        var counting_stream = std.io.CountingOutStream(std.io.NullOutStream.Error).init(&null_stream.stream);
-                        var auto_indenting_stream = std.io.AutoIndentingStream(counting_stream);
+                        var null_stream = std.io.NullOutStream{};
+                        var counting_stream = std.io.CountingOutStream(std.io.NullOutStream).init(&null_stream);
+                        const AutoIndentingStream = std.io.AutoIndentingStream(@TypeOf(counting_stream));
+                        var auto_indenting_stream = AutoIndentingStream.init(&counting_stream, indent_delta);
 
                         var it = exprs.iterator(0);
                         var i: usize = 0;
 
                         while (it.next()) |expr| : (i += 1) {
                             counting_stream.bytes_written = 0;
-                            try renderExpression(allocator, &counting_stream.stream, tree, expr.*, Space.None);
+                            try renderExpression(allocator, &auto_indenting_stream, tree, expr.*, Space.None);
                             const width = @intCast(usize, counting_stream.bytes_written);
                             const col = i % row_size;
                             column_widths[col] = std.math.max(column_widths[col], width);
@@ -2352,37 +2321,6 @@ fn nodeCausesSliceOpSpace(base: *ast.Node) bool {
         else => true,
     };
 }
-
-// An OutStream that returns whether the given character has been written to it.
-// The contents are not written to anything.
-const FindByteOutStream = struct {
-    const Self = FindByteOutStream;
-    pub const Error = error{};
-    pub const Stream = std.io.AutoIndentingStream(Error);
-
-    stream: Stream,
-    byte_found: bool,
-    byte: u8,
-
-    pub fn init(byte: u8) Self {
-        return Self{
-            .stream = Stream{ .writeFn = writeFn },
-            .byte = byte,
-            .byte_found = false,
-        };
-    }
-
-    fn writeFn(out_stream: *Stream, bytes: []const u8) Error!usize {
-        const self = @fieldParentPtr(Self, "stream", out_stream);
-        if (self.byte_found) return bytes.len;
-        self.byte_found = blk: {
-            for (bytes) |b|
-                if (b == self.byte) break :blk true;
-            break :blk false;
-        };
-        return bytes.len;
-    }
-};
 
 fn copyFixingWhitespace(stream: var, slice: []const u8) @TypeOf(stream).Child.Error!void {
     for (slice) |byte| switch (byte) {

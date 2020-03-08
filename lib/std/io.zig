@@ -97,7 +97,7 @@ pub const SliceSeekableInStream = @import("io/seekable_stream.zig").SliceSeekabl
 pub const COutStream = @import("io/c_out_stream.zig").COutStream;
 pub const InStream = @import("io/in_stream.zig").InStream;
 pub const OutStream = @import("io/out_stream.zig").OutStream;
-pub const AutoIndentingStream = @import("io/auto_indenting_out_stream.zig").AutoIndentingStream;
+pub const AutoIndentingStream = @import("io/auto_indenting_stream.zig").AutoIndentingStream;
 
 /// Deprecated; use `std.fs.Dir.writeFile`.
 pub fn writeFile(path: []const u8, data: []const u8) !void {
@@ -496,68 +496,50 @@ test "io.SliceOutStream" {
     testing.expectEqualSlices(u8, "HelloWorld!", slice_stream.getWritten());
 }
 
-var null_out_stream_state = NullOutStream.init();
-pub const null_out_stream = &null_out_stream_state.stream;
+var null_out_stream_state = NullOutStream{};
+pub const null_out_stream = &null_out_stream_state;
 
 /// An OutStream that doesn't write to anything.
 pub const NullOutStream = struct {
     pub const Error = error{};
-    pub const Stream = OutStream(Error);
-
-    stream: Stream,
-
-    pub fn init() NullOutStream {
-        return NullOutStream{
-            .stream = Stream{ .writeFn = writeFn },
-        };
-    }
-
-    fn writeFn(out_stream: *Stream, bytes: []const u8) Error!usize {
-        return bytes.len;
-    }
+    fn write(self: *NullOutStream, bytes: []const u8) Error!void {}
 };
 
 test "io.NullOutStream" {
-    var null_stream = NullOutStream.init();
-    const stream = &null_stream.stream;
-    stream.write("yay" ** 10000) catch unreachable;
+    var null_stream = NullOutStream{};
+    null_stream.write("yay" ** 10000) catch unreachable;
 }
 
 /// An OutStream that counts how many bytes has been written to it.
-pub fn CountingOutStream(comptime OutStreamError: type) type {
+pub fn CountingOutStream(comptime DownStream: type) type {
     return struct {
         const Self = @This();
-        pub const Stream = OutStream(Error);
-        pub const Error = OutStreamError;
+        pub const Stream = DownStream;
+        pub const Error = DownStream.Error;
 
-        stream: Stream,
         bytes_written: u64,
-        child_stream: *Stream,
+        down_stream: *Stream,
 
-        pub fn init(child_stream: *Stream) Self {
+        pub fn init(down_stream: *Stream) Self {
             return Self{
-                .stream = Stream{ .writeFn = writeFn },
                 .bytes_written = 0,
-                .child_stream = child_stream,
+                .down_stream = down_stream,
             };
         }
 
-        fn writeFn(out_stream: *Stream, bytes: []const u8) OutStreamError!usize {
-            const self = @fieldParentPtr(Self, "stream", out_stream);
-            try self.child_stream.write(bytes);
+        fn write(self: *Self, bytes: []const u8) Error!void {
+            try self.down_stream.write(bytes);
             self.bytes_written += bytes.len;
-            return bytes.len;
         }
     };
 }
 
 test "io.CountingOutStream" {
-    var null_stream = NullOutStream.init();
-    var counting_stream = CountingOutStream(NullOutStream.Error).init(&null_stream.stream);
-    const stream = &counting_stream.stream;
+    var null_stream = NullOutStream{};
+    var counting_stream = CountingOutStream(NullOutStream).init(&null_stream);
 
     const bytes = "yay" ** 10000;
-    stream.write(bytes) catch unreachable;
+    counting_stream.write(bytes) catch unreachable;
     testing.expect(counting_stream.bytes_written == bytes.len);
 }
 
@@ -754,6 +736,73 @@ pub fn BitOutStream(endian: builtin.Endian, comptime Error: type) type {
             }
 
             return self.out_stream.writeOnce(buffer);
+        }
+    };
+}
+
+// An OutStream that returns whether the given character has been written to it.
+// The contents are not written to anything.
+pub const FindByteOutStream = struct {
+    const Self = FindByteOutStream;
+    pub const Error = error{};
+
+    byte_found: bool,
+    byte: u8,
+
+    pub fn init(byte: u8) Self {
+        return Self{
+            .byte = byte,
+            .byte_found = false,
+        };
+    }
+
+    fn write(self: *Self, bytes: []const u8) Error!void {
+        if (self.byte_found) return;
+        self.byte_found = blk: {
+            for (bytes) |b|
+                if (b == self.byte) break :blk true;
+            break :blk false;
+        };
+    }
+};
+
+pub fn ChangeDetectionStream(comptime DownStream: type) type {
+    return struct {
+        const Self = @This();
+        pub const Error = DownStream.Error;
+
+        anything_changed: bool = false,
+        down_stream: *DownStream,
+        source_index: usize,
+        source: []const u8,
+
+        pub fn init(down_stream: *DownStream, source: []const u8) Self {
+            return Self{
+                .down_stream = down_stream,
+                .source_index = 0,
+                .source = source,
+            };
+        }
+
+        fn write(self: *Self, bytes: []const u8) Error!void {
+            if (!self.anything_changed) {
+                const end = self.source_index + bytes.len;
+                if (end > self.source.len) {
+                    self.anything_changed = true;
+                } else {
+                    const src_slice = self.source[self.source_index..end];
+                    self.source_index += bytes.len;
+                    if (!mem.eql(u8, bytes, src_slice)) {
+                        self.anything_changed = true;
+                    }
+                }
+            }
+
+            return self.down_stream.write(bytes);
+        }
+
+        pub fn changeDetected(self: *Self) bool {
+            return self.anything_changed or (self.source_index != self.source.len);
         }
     };
 }
