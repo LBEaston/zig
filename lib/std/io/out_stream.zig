@@ -2,7 +2,6 @@ const std = @import("../std.zig");
 const builtin = @import("builtin");
 const root = @import("root");
 const mem = std.mem;
-const assert = std.debug.assert;
 
 pub const default_stack_size = 1 * 1024 * 1024;
 pub const stack_size: usize = if (@hasDecl(root, "stack_size_std_io_OutStream"))
