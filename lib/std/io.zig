@@ -97,6 +97,7 @@ pub const SliceSeekableInStream = @import("io/seekable_stream.zig").SliceSeekabl
 pub const COutStream = @import("io/c_out_stream.zig").COutStream;
 pub const InStream = @import("io/in_stream.zig").InStream;
 pub const OutStream = @import("io/out_stream.zig").OutStream;
+pub const AutoIndentingStream = @import("io/auto_indenting_out_stream.zig").AutoIndentingStream;
 
 /// Deprecated; use `std.fs.Dir.writeFile`.
 pub fn writeFile(path: []const u8, data: []const u8) !void {

@@ -21,7 +21,7 @@ pub fn render(allocator: *mem.Allocator, stream: var, tree: *ast.Tree) (@TypeOf(
     const MyStream = struct {
         const MyStream = @This();
         const StreamError = @TypeOf(stream).Child.Error;
-        const Stream = std.io.OutStream(StreamError);
+        const Stream = std.io.AutoIndentingStream(StreamError);
 
         anything_changed_ptr: *bool,
         child_stream: @TypeOf(stream),
@@ -536,9 +536,9 @@ fn renderExpression(
                 .ArrayType => |array_info| {
                     const lbracket = prefix_op_node.op_token;
                     const rbracket = tree.nextToken(if (array_info.sentinel) |sentinel|
-                            sentinel.lastToken()
-                        else
-                            array_info.len_expr.lastToken());
+                        sentinel.lastToken()
+                    else
+                        array_info.len_expr.lastToken());
 
                     const starts_with_comment = tree.tokens.at(lbracket + 1).id == .LineComment;
                     const ends_with_comment = tree.tokens.at(rbracket - 1).id == .LineComment;
@@ -907,6 +907,7 @@ fn renderExpression(
                         // Null stream for counting the printed length of each expression
                         var null_stream = std.io.NullOutStream.init();
                         var counting_stream = std.io.CountingOutStream(std.io.NullOutStream.Error).init(&null_stream.stream);
+                        var auto_indenting_stream = std.io.AutoIndentingStream(counting_stream);
 
                         var it = exprs.iterator(0);
                         var i: usize = 0;
@@ -1409,16 +1410,16 @@ fn renderExpression(
             const rparen = tree.prevToken(
             // the first token for the annotation expressions is the left
             // parenthesis, hence the need for two prevToken
-                if (fn_proto.align_expr) |align_expr|
-                    tree.prevToken(tree.prevToken(align_expr.firstToken()))
-                else if (fn_proto.section_expr) |section_expr|
-                    tree.prevToken(tree.prevToken(section_expr.firstToken()))
-                else if (fn_proto.callconv_expr) |callconv_expr|
-                    tree.prevToken(tree.prevToken(callconv_expr.firstToken()))
-                else switch (fn_proto.return_type) {
-                    .Explicit => |node| node.firstToken(),
-                    .InferErrorSet => |node| tree.prevToken(node.firstToken()),
-                });
+            if (fn_proto.align_expr) |align_expr|
+                tree.prevToken(tree.prevToken(align_expr.firstToken()))
+            else if (fn_proto.section_expr) |section_expr|
+                tree.prevToken(tree.prevToken(section_expr.firstToken()))
+            else if (fn_proto.callconv_expr) |callconv_expr|
+                tree.prevToken(tree.prevToken(callconv_expr.firstToken()))
+            else switch (fn_proto.return_type) {
+                .Explicit => |node| node.firstToken(),
+                .InferErrorSet => |node| tree.prevToken(node.firstToken()),
+            });
             assert(tree.tokens.at(rparen).id == .RParen);
 
             const src_params_trailing_comma = blk: {
@@ -2357,7 +2358,7 @@ fn nodeCausesSliceOpSpace(base: *ast.Node) bool {
 const FindByteOutStream = struct {
     const Self = FindByteOutStream;
     pub const Error = error{};
-    pub const Stream = std.io.OutStream(Error);
+    pub const Stream = std.io.AutoIndentingStream(Error);
 
     stream: Stream,
     byte_found: bool,
