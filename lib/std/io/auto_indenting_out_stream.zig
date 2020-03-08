@@ -8,7 +8,7 @@ pub fn AutoIndentingStream(comptime WriteError: type) type {
     return struct {
         const Self = @This();
         pub const Error = WriteError;
-        pub const WriteFn = fn (self: *Self, bytes: []const u8) Error!void;
+        pub const WriteFn = fn (self: *Self, bytes: []const u8) Error!usize;
 
         writeFn: WriteFn,
 
@@ -23,7 +23,8 @@ pub fn AutoIndentingStream(comptime WriteError: type) type {
         }
 
         fn writeNoIndent(self: *Self, bytes: []const u8) Error!void {
-            return self.writeFn(self, bytes);
+            const written = try self.writeFn(self, bytes);
+            assert(written == bytes.len); // Correct slicing of bytes should be done further downstream
         }
 
         pub fn print(self: *Self, comptime format: []const u8, args: var) Error!void {
