@@ -2,6 +2,8 @@ const std = @import("../std.zig");
 const builtin = @import("builtin");
 const root = @import("root");
 const mem = std.mem;
+const assert = std.debug.assert;
+const warn = std.debug.warn;
 
 pub const default_stack_size = 1 * 1024 * 1024;
 pub const stack_size: usize = if (@hasDecl(root, "stack_size_std_io_OutStream"))
@@ -21,6 +23,11 @@ pub fn OutStream(comptime WriteError: type) type {
         writeFn: WriteFn,
 
         pub fn writeOnce(self: *Self, bytes: []const u8) Error!usize {
+            try self.applyIndent();
+            try self.writeNoIndent(bytes);
+        }
+
+        fn writeNoIndent(self: *Self, bytes: []const u8) Error!void {
             if (std.io.is_async) {
                 // Let's not be writing 0xaa in safe modes for upwards of 4 MiB for every stream write.
                 @setRuntimeSafety(false);
@@ -48,6 +55,11 @@ pub fn OutStream(comptime WriteError: type) type {
         }
 
         pub fn writeByteNTimes(self: *Self, byte: u8, n: usize) Error!void {
+            try self.applyIndent();
+            try self.writeByteNTimesNoIndent(byte, n);
+        }
+
+        fn writeByteNTimesNoIndent(self: *Self, byte: u8, n: usize) Error!void {
             var bytes: [256]u8 = undefined;
             mem.set(u8, bytes[0..], byte);
 
@@ -57,6 +69,61 @@ pub fn OutStream(comptime WriteError: type) type {
                 try self.write(bytes[0..to_write]);
                 remaining -= to_write;
             }
+        }
+
+        current_line_empty: bool = true,
+        indent_stack: [255]u8 = undefined,
+        indent_stack_top: u8 = 0,
+        indent_delta: u8 = 0,
+
+        pub fn insertNewline(self: *Self) Error!void {
+            warn("insertNewline\n", .{});
+            try self.writeNoIndent("\n");
+            self.current_line_empty = true;
+            warn("~insertNewline\n", .{});
+        }
+
+        pub fn insertNewlines(self: *Self, n: usize) Error!void {
+            warn("insertNewlines {}\n", .{n});
+            var i: usize = 0;
+            while (i < n) : (i += 1) try self.insertNewline();
+            warn("~insertNewlines\n", .{});
+        }
+
+        pub fn maybeInsertNewline(self: *Self) Error!void {
+            warn("maybeInsertNewline\n", .{});
+            if (! self.current_line_empty)
+                try self.insertNewline();
+            warn("~maybeInsertNewline\n", .{});
+        }
+
+        /// Push default indentation
+        pub fn pushIndent(self: *Self) void {
+            // Doesn't actually write any indentation. Just primes the stream to be able to write the correct indentation if it needs to.
+            warn("pushindent\n", .{});
+            self.pushIndentN(self.indent_delta);
+            warn("~pushindent\n", .{});
+        }
+
+        pub fn pushIndentN(self: *Self, n: u8) void {
+            warn("pushindentN +{} {}\n", .{n, self.indent_stack_top});
+            assert(self.indent_stack_top < std.math.maxInt(u8));
+            self.indent_stack[self.indent_stack_top] = n;
+            self.indent_stack_top += 1;
+            warn("~pushindent +{} {}\n", .{n, self.indent_stack_top});
+        }
+
+        pub fn popIndent(self: *Self) void {
+            warn("popindent {}\n", .{self.indent_stack_top});
+            assert(self.indent_stack_top != 0);
+            self.indent_stack_top -= 1;
+        }
+
+        fn applyIndent(self: *Self) Error!void {
+            if (self.current_line_empty and self.indent_stack_top > 0)
+                for (self.indent_stack[0..self.indent_stack_top]) |indent|
+                    try self.writeByteNTimesNoIndent(' ', indent);
+            self.current_line_empty = false;
         }
 
         /// Write a native-endian integer.
