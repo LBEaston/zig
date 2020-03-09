@@ -482,6 +482,17 @@ pub fn eql(comptime T: type, a: []const T, b: []const T) bool {
     return true;
 }
 
+/// Compares two slices and returns the index of the first inequality.
+/// Returns the length of the slices if they are equal.
+pub fn diffIndex(comptime T: type, a: []const T, b: []const T) usize {
+    const shortest = math.min(a.len, b.len);
+    if (a.ptr == b.ptr)
+        return shortest;
+    var index: usize = 0;
+    while (index < shortest) : (index += 1) if (a[index] != b[index]) return index;
+    return shortest;
+}
+
 /// Deprecated. Use `span`.
 pub fn toSliceConst(comptime T: type, ptr: [*:0]const T) [:0]const T {
     return ptr[0..len(ptr) :0];
