@@ -5387,18 +5387,20 @@ fn parseCPrimaryExpr(c: *Context, it: *CTokenList.Iterator, source: []const u8, 
         .LParen => {
             const inner_node = try parseCExpr(c, it, source, source_loc, scope);
 
-            if (it.next().?.id != .RParen) {
+            const next_id = it.next().?.id;
+            if (next_id != .RParen) {
                 const first_tok = it.list.at(0);
                 try failDecl(
                     c,
                     source_loc,
                     source[first_tok.start..first_tok.end],
-                    "unable to translate C expr: expected ')'' here",
-                    .{},
+                    "unable to translate C expr: expected ')'' instead got: {}",
+                    .{@tagName(next_id)},
                 );
                 return error.ParseError;
             }
             var saw_l_paren = false;
+            var saw_integer_literal = false;
             switch (it.peek().?.id) {
                 // (type)(to_cast)
                 .LParen => {
@@ -5407,6 +5409,10 @@ fn parseCPrimaryExpr(c: *Context, it: *CTokenList.Iterator, source: []const u8, 
                 },
                 // (type)identifier
                 .Identifier => {},
+                // (type)integer
+                .IntegerLiteral => {
+                    saw_integer_literal = true;
+                },
                 else => return inner_node,
             }
 
@@ -5427,10 +5433,22 @@ fn parseCPrimaryExpr(c: *Context, it: *CTokenList.Iterator, source: []const u8, 
                 return error.ParseError;
             }
 
+            if (saw_integer_literal) {
+                // @intToPtr(?dest, x)
+                const optional_node = try transCreateNodePrefixOp(c, .OptionalType, .QuestionMark, "?");
+                optional_node.rhs = inner_node;
+
+                const int_to_ptr = try transCreateNodeBuiltinFnCall(c, "@intToPtr");
+                try int_to_ptr.params.push(&optional_node.base);
+                try int_to_ptr.params.push(node_to_cast);
+                int_to_ptr.rparen_token = try appendToken(c, .RParen, ")");
+                return &int_to_ptr.base;
+            }
+
             // TODO: It might be nice if we only did the alignCasting for opaque types
             //(  if (@typeInfo(@TypeOf(x)) == .Pointer)
             //    @ptrCast(dest, @alignCast(@alignOf(dest.Child), x))
-            //else if (@typeInfo(@TypeOf(x)) == .Integer)
+            //else if (@typeInfo(@TypeOf(x)) == .Int)
             //    @intToPtr(dest, x)
             //else
             //    @as(dest, x) )
