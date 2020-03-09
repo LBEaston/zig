@@ -800,35 +800,20 @@ fn renderExpression(
                         .node => |node| tree.nextToken(node.lastToken()),
                     };
 
-                    if (exprs.len == 0) {
-                        switch (suffix_op.lhs) {
-                            .dot => |dot| try renderToken(tree, stream, dot, Space.None),
-                            .node => |node| try renderExpression(allocator, stream, tree, node, Space.None),
-                        }
-
-                        {
-                            stream.pushIndent();
-                            defer stream.popIndent();
-                            try renderToken(tree, stream, lbrace, Space.None);
-                        }
-
-                        return renderToken(tree, stream, suffix_op.rtoken, space);
-                    }
-                    if (exprs.len == 1 and tree.tokens.at(exprs.at(0).*.lastToken() + 1).id == .RBrace) {
-                        const expr = exprs.at(0).*;
-
-                        switch (suffix_op.lhs) {
-                            .dot => |dot| try renderToken(tree, stream, dot, Space.None),
-                            .node => |node| try renderExpression(allocator, stream, tree, node, Space.None),
-                        }
-                        try renderToken(tree, stream, lbrace, Space.None);
-                        try renderExpression(allocator, stream, tree, expr, Space.None);
-                        return renderToken(tree, stream, suffix_op.rtoken, space);
-                    }
-
                     switch (suffix_op.lhs) {
                         .dot => |dot| try renderToken(tree, stream, dot, Space.None),
                         .node => |node| try renderExpression(allocator, stream, tree, node, Space.None),
+                    }
+                    if (exprs.len == 0) {
+                        try renderToken(tree, stream, lbrace, Space.None);
+                        return renderToken(tree, stream, suffix_op.rtoken, space);
+                    }
+                    if (exprs.len == 1 and exprs.at(0).*.id != .MultilineStringLiteral and tree.tokens.at(exprs.at(0).*.lastToken() + 1).id == .RBrace) {
+                        const expr = exprs.at(0).*;
+
+                        try renderToken(tree, stream, lbrace, Space.None);
+                        try renderExpression(allocator, stream, tree, expr, Space.None);
+                        return renderToken(tree, stream, suffix_op.rtoken, space);
                     }
 
                     // scan to find row size
@@ -839,12 +824,12 @@ fn renderExpression(
                             const expr = it.next().?.*;
                             if (it.peek()) |next_expr| {
                                 const expr_last_token = expr.*.lastToken() + 1;
-                                const loc = tree.tokenLocation(tree.tokens.at(expr_last_token).end, next_expr.*.firstToken());
+                                const loc = tree.tokenLocation(tree.tokens.at(expr_last_token).start, next_expr.*.firstToken());
                                 if (loc.line != 0) break :blk count;
                                 count += 1;
                             } else {
                                 const expr_last_token = expr.*.lastToken();
-                                const loc = tree.tokenLocation(tree.tokens.at(expr_last_token).end, suffix_op.rtoken);
+                                const loc = tree.tokenLocation(tree.tokens.at(expr_last_token).start, suffix_op.rtoken);
                                 if (loc.line == 0) {
                                     // all on one line
                                     const src_has_trailing_comma = trailblk: {
@@ -872,21 +857,44 @@ fn renderExpression(
                         var column_widths = widths[widths.len - row_size ..];
 
                         // Null stream for counting the printed length of each expression
-                        var null_stream = std.io.NullOutStream{};
-                        var counting_stream = std.io.CountingOutStream(std.io.NullOutStream).init(&null_stream);
+                        var line_find_stream = std.io.FindByteOutStream.init('\n');
+                        var counting_stream = std.io.CountingOutStream(std.io.FindByteOutStream).init(&line_find_stream);
                         const AutoIndentingStream = std.io.AutoIndentingStream(@TypeOf(counting_stream));
                         var auto_indenting_stream = AutoIndentingStream.init(&counting_stream, indent_delta);
 
                         var it = exprs.iterator(0);
                         var i: usize = 0;
+                        var c: usize = 0;
+                        var single_line = true;
 
                         while (it.next()) |expr| : (i += 1) {
-                            counting_stream.bytes_written = 0;
-                            try renderExpression(allocator, &auto_indenting_stream, tree, expr.*, Space.None);
-                            const width = @intCast(usize, counting_stream.bytes_written);
-                            const col = i % row_size;
-                            column_widths[col] = std.math.max(column_widths[col], width);
-                            expr_widths[i] = width;
+                            if (it.peek()) |next_expr| {
+                                counting_stream.bytes_written = 0;
+                                var dummy_col: usize = 0;
+                                line_find_stream.byte_found = false;
+                                try renderExpression(allocator, &auto_indenting_stream, tree, expr.*, Space.None);
+                                const width = @intCast(usize, counting_stream.bytes_written);
+                                expr_widths[i] = width;
+
+                                if (!line_find_stream.byte_found) {
+                                    const col = c % row_size;
+                                    column_widths[col] = std.math.max(column_widths[col], width);
+
+                                    const expr_last_token = expr.*.lastToken() + 1;
+                                    const loc = tree.tokenLocation(tree.tokens.at(expr_last_token).start, next_expr.*.firstToken());
+                                    if (loc.line == 0) {
+                                        c += 1;
+                                    } else {
+                                        single_line = false;
+                                        c = 0;
+                                    }
+                                } else {
+                                    single_line = false;
+                                    c = 0;
+                                }
+                            } else {
+                                break;
+                            }
                         }
 
                         {
@@ -896,37 +904,41 @@ fn renderExpression(
 
                             it.set(0);
                             i = 0;
-                            var col: usize = 1;
+                            c = 0;
+                            var last_col_index: usize = row_size - 1;
                             while (it.next()) |expr| : (i += 1) {
                                 if (it.peek()) |next_expr| {
                                     try renderExpression(allocator, stream, tree, expr.*, Space.None);
 
                                     const comma = tree.nextToken(expr.*.lastToken());
+                                    if (c != last_col_index) {
+                                        line_find_stream.byte_found = false;
+                                        try renderExpression(allocator, &auto_indenting_stream, tree, expr.*, Space.None);
+                                        try renderExpression(allocator, &auto_indenting_stream, tree, next_expr.*, Space.None);
+                                        if (!line_find_stream.byte_found) {
+                                            // Neither the current or next expression is multiline
+                                            try renderToken(tree, stream, comma, Space.Space); // ,
+                                            assert(column_widths[c % row_size] >= expr_widths[i]);
+                                            const padding = column_widths[c % row_size] - expr_widths[i];
+                                            try stream.writeByteNTimes(' ', padding);
 
-                                    if (col != row_size) {
+                                            c += 1;
+                                            continue;
+                                        }
+                                    }
+                                    if (single_line) {
                                         try renderToken(tree, stream, comma, Space.Space); // ,
-
-                                        const padding = column_widths[i % row_size] - expr_widths[i];
-                                        try stream.writeByteNTimes(' ', padding);
-
-                                        col += 1;
                                         continue;
                                     }
-                                    col = 1;
 
-                                    if (tree.tokens.at(tree.nextToken(comma)).id != .MultilineStringLiteralLine) {
-                                        try renderToken(tree, stream, comma, Space.Newline); // ,
-                                    } else {
-                                        try renderToken(tree, stream, comma, Space.None); // ,
-                                    }
-
+                                    c = 0;
+                                    try renderToken(tree, stream, comma, Space.Newline); // ,
                                     try renderExtraNewline(tree, stream, next_expr.*);
                                 } else {
                                     try renderExpression(allocator, stream, tree, expr.*, Space.Comma); // ,
                                 }
                             }
                         }
-                        const last_node = it.prev().?;
                         return renderToken(tree, stream, suffix_op.rtoken, space);
                     } else {
                         try renderToken(tree, stream, lbrace, Space.Space);
