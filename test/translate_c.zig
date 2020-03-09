@@ -2785,4 +2785,20 @@ pub fn addCases(cases: *tests.TranslateCContext) void {
         \\    return (if (@typeInfo(@TypeOf(dpy)) == .Pointer) @ptrCast(_XPrivDisplay, @alignCast(@alignOf(_XPrivDisplay.Child), dpy)) else if (@typeInfo(@TypeOf(dpy)) == .Int) @intToPtr(_XPrivDisplay, dpy) else @as(_XPrivDisplay, dpy)).*.default_screen;
         \\}
     });
+
+    cases.add("Cast from integer literals to poiter",
+        \\#define NULL ((void*)0)
+        \\#define GPIO_0_MEM_MAP ((unsigned*)0x8000)
+        \\#define GPIO_1_MEM_MAP ((unsigned*)0x8004)
+        \\#define GPIO_2_MEM_MAP ((unsigned*)0x8008)
+        \\
+    , &[_][]const u8{
+        \\pub const NULL = @intToPtr(?*c_void, 0);
+    ,
+        \\pub const GPIO_0_MEM_MAP = @intToPtr(?[*c]c_uint, 0x8000);
+    ,
+        \\pub const GPIO_1_MEM_MAP = @intToPtr(?[*c]c_uint, 0x8004);
+    ,
+        \\pub const GPIO_2_MEM_MAP = @intToPtr(?[*c]c_uint, 0x8008);
+    });
 }
